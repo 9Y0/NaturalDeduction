@@ -2,6 +2,7 @@ module Main where
 
 import Control.Applicative (empty, (<|>))
 import Data.List (find)
+import GHC.Natural (Natural)
 import Solver
   ( Solver (solve),
     getState,
@@ -9,7 +10,7 @@ import Solver
     modifyState,
   )
 
-data Formula = Falsum | Atom Int | And Formula Formula | Or Formula Formula | Impl Formula Formula
+data Formula = Falsum | Atom Natural | And Formula Formula | Or Formula Formula | Impl Formula Formula
   deriving (Show, Eq)
 
 infixr 4 -->
@@ -27,7 +28,7 @@ infixr 2 \/
 (\/) :: Formula -> Formula -> Formula
 (\/) = Or
 
-type AssumptionCounter = Int
+type AssumptionCounter = Natural
 
 data Assumption = Assumption Formula AssumptionCounter
   deriving (Show)
