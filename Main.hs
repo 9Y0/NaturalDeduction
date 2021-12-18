@@ -44,6 +44,7 @@ data Assumption = Assumption Formula AssumptionCounter
 type Theory = [Formula]
 
 data DeductionTree = Tree Formula (Maybe AssumptionCounter) [DeductionTree] | Assumption' Assumption
+  deriving (Show)
 
 printDeductionTree :: DeductionTree -> IO ()
 printDeductionTree = go 0
@@ -82,14 +83,15 @@ proof f theory = fst <$> solve (proof' f theory []) 0
 
 proof' :: Formula -> Theory -> [Assumption] -> Solver AssumptionCounter DeductionTree
 proof' f theory assumptions =
-  proofFromTheory f theory
+  proofFromTheory f theory assumptions
     <|> proofFromAssumption f assumptions
     <|> proofByIntroduction f theory assumptions
 
-proofFromTheory :: Formula -> Theory -> Solver AssumptionCounter DeductionTree
-proofFromTheory f theory = do
+-- TODO: Assumptions are now always rendered, even if they are not directly used
+proofFromTheory :: Formula -> Theory -> [Assumption] -> Solver AssumptionCounter DeductionTree
+proofFromTheory f theory assumptions = do
   if f `elem` theory
-    then return $ Tree f Nothing []
+    then return $ Tree f Nothing $ map Assumption' assumptions
     else empty
 
 proofFromAssumption :: Formula -> [Assumption] -> Solver AssumptionCounter DeductionTree
