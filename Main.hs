@@ -19,7 +19,7 @@ instance Show Formula where
   showsPrec p (And f1 f2) = showParen (p > 3) $ showsPrec 3 f1 . (" \\land " ++) . showsPrec 3 f2
   showsPrec p (Or f1 f2) = showParen (p > 2) $ showsPrec 2 f1 . (" \\lor " ++) . showsPrec 2 f2
   showsPrec _ (Impl f1 Falsum) = ("\\lnot " ++) . showsPrec 5 f1
-  showsPrec p (Impl f1 f2) = showParen (p > 4) $ showsPrec 4 f1 . (" \\rightarrow " ++) . showsPrec 4 f2
+  showsPrec p (Impl f1 f2) = showParen (p >= 4) $ showsPrec 4 f1 . (" \\rightarrow " ++) . showsPrec 4 f2
 
 infixr 4 -->
 
