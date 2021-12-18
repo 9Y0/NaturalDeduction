@@ -9,7 +9,7 @@ import Solver
     modifyState,
   )
 
-data Formula = Falsum | Basic Int | And Formula Formula | Or Formula Formula | Impl Formula Formula
+data Formula = Falsum | Atom Int | And Formula Formula | Or Formula Formula | Impl Formula Formula
   deriving (Show, Eq)
 
 infixr 4 -->
@@ -60,7 +60,7 @@ proofFromAssumption f assumptions = do
 proofByIntroduction :: Formula -> Theory -> [Assumption] -> Solver AssumptionCounter DeductionTree
 proofByIntroduction f theory assumptions = case f of
   Falsum -> empty
-  Basic _ -> empty
+  Atom _ -> empty
   And f1 f2 -> Tree f Nothing <$> sequence [proof' f1 theory assumptions, proof' f2 theory assumptions]
   Or f1 f2 -> Tree f Nothing . return <$> proof' f1 theory assumptions <|> proof' f2 theory assumptions
   Impl f1 f2 -> do
