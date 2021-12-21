@@ -1,17 +1,22 @@
 module Main where
 
 import Control.Applicative (empty, (<|>))
-import Control.Monad.Trans.Class (MonadTrans (lift))
-import Data.List (find, intersperse)
+import Data.List (intersperse)
 import Formula
-  ( Assumption (..),
-    AssumptionCounter,
-    DeductionTree (..),
-    Formula (..),
+  ( Assumption (Assumption),
+    DeductionTree (Assumption', Tree),
+    Formula (And, Atom, Falsum, Impl, Or),
     Theory,
   )
-import GHC.Natural (Natural)
-import State (StateT (runStateT), get, modify)
+import Solver
+  ( Solver,
+    SolverEnviron (Environ),
+    find,
+    getAssumptions,
+    getTheory,
+    runSolver,
+    withAssumption,
+  )
 
 printDeductionTree :: DeductionTree -> IO ()
 printDeductionTree = go 0
@@ -45,40 +50,32 @@ printDeductionTree = go 0
       putStr $ spaces (indentLevel + 1)
       putStr "}\n"
 
-type Solver = StateT AssumptionCounter Maybe DeductionTree
-
 proof :: Formula -> Theory -> Maybe DeductionTree
-proof f theory = fst <$> runStateT (proof' f theory []) 0
+proof f theory = fst <$> runSolver (proof' f) (Environ theory)
 
-proof' :: Formula -> Theory -> [Assumption] -> Solver
-proof' f theory assumptions =
-  proofFromTheory f theory assumptions
-    <|> proofFromAssumption f assumptions
-    <|> proofByIntroduction f theory assumptions
+proof' :: Formula -> Solver DeductionTree
+proof' f = proofFromTheory f <|> proofFromAssumption f <|> proofByIntroduction f
 
 -- TODO: Assumptions are now always rendered, even if they are not directly used
-proofFromTheory :: Formula -> Theory -> [Assumption] -> Solver
-proofFromTheory f theory assumptions = do
+proofFromTheory :: Formula -> Solver DeductionTree
+proofFromTheory f = do
+  theory <- getTheory
   if f `elem` theory
-    then return $ Tree f Nothing $ map Assumption' assumptions
+    then Tree f Nothing . map Assumption' <$> getAssumptions
     else empty
 
-proofFromAssumption :: Formula -> [Assumption] -> Solver
-proofFromAssumption f assumptions = do
-  assumption <- lift $ find (\(Assumption f' _) -> f == f') assumptions
-  return $ Tree f Nothing [Assumption' assumption]
+proofFromAssumption :: Formula -> Solver DeductionTree
+proofFromAssumption f = Tree f Nothing . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
 
-proofByIntroduction :: Formula -> Theory -> [Assumption] -> Solver
-proofByIntroduction f theory assumptions = case f of
+proofByIntroduction :: Formula -> Solver DeductionTree
+proofByIntroduction f = case f of
   Falsum -> empty
   Atom _ -> empty
-  And f1 f2 -> Tree f Nothing <$> sequence [proof' f1 theory assumptions, proof' f2 theory assumptions]
-  Or f1 f2 -> Tree f Nothing . return <$> proof' f1 theory assumptions <|> proof' f2 theory assumptions
+  And f1 f2 -> Tree f Nothing <$> sequence [proof' f1, proof' f2]
+  Or f1 f2 -> Tree f Nothing . return <$> proof' f1 <|> proof' f2
   Impl f1 f2 -> do
-    assumptionCounter <- get
-    modify (+ 1)
-    p <- proof' f2 theory (Assumption f1 assumptionCounter : assumptions)
-    return $ Tree f (Just assumptionCounter) [p]
+    (p, assumptionNumber) <- proof' f2 `withAssumption` f1
+    return $ Tree f (Just assumptionNumber) [p]
 
 main :: IO ()
 main = undefined
