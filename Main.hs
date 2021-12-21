@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main where
 
 import Control.Applicative (empty, (<|>))
@@ -11,12 +13,19 @@ import Formula
 import Solver
   ( Solver,
     SolverEnviron (Environ),
+    constructFromKnownDeduction,
     find,
+    findKnown,
     getAssumptions,
     getTheory,
     runSolver,
     withAssumption,
+    withoutKnown,
   )
+
+conclusion :: DeductionTree -> Formula
+conclusion (Tree f _ _) = f
+conclusion (Assumption' (Assumption f _)) = f
 
 printDeductionTree :: DeductionTree -> IO ()
 printDeductionTree = go 0
@@ -55,7 +64,7 @@ proof :: Formula -> Theory -> Maybe DeductionTree
 proof f theory = fst <$> runSolver (proof' f) (Environ theory)
 
 proof' :: Formula -> Solver DeductionTree
-proof' f = proofFromTheory f <|> proofFromAssumption f <|> proofByIntroduction f
+proof' f = proofFromTheory f <|> proofFromAssumption f <|> proofByIntroduction f <|> proofByElimination f
 
 -- TODO: Assumptions are now always rendered, even if they are not directly used
 proofFromTheory :: Formula -> Solver DeductionTree
@@ -77,6 +86,45 @@ proofByIntroduction f = case f of
   Impl f1 f2 -> do
     (p, assumptionNumber) <- proof' f2 `withAssumption` f1
     return $ Tree f [assumptionNumber] [p]
+
+proofByElimination :: Formula -> Solver DeductionTree
+proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|> eliminateFalsum
+  where
+    eliminateAnd :: Solver DeductionTree
+    eliminateAnd = Tree f [] . return <$> findKnown (\case And f1 f2 -> f == f1 || f == f2; _ -> False)
+
+    eliminateImplication :: Solver DeductionTree
+    eliminateImplication = do
+      constructFromKnownDeduction
+        ( \deduction -> case conclusion deduction of
+            Impl f1 f2 ->
+              if f2 /= f
+                then empty
+                else (\f1Deduction -> Tree f [] [f1Deduction, deduction]) <$> proof' f1 `withoutKnown` deduction
+            _ -> empty
+        )
+
+    eliminateOr :: Solver DeductionTree
+    eliminateOr =
+      constructFromKnownDeduction
+        ( \deduction -> case conclusion deduction of
+            Or f1 f2 ->
+              ( do
+                  (leftDeduction, leftNumber) <- proof' f `withAssumption` f1
+                  (rightDeduction, rightNumber) <- proof' f `withAssumption` f2
+                  return $ Tree f [leftNumber, rightNumber] [deduction, leftDeduction, rightDeduction]
+              )
+                `withoutKnown` deduction
+            _ -> empty
+        )
+
+    eliminateFalsum :: Solver DeductionTree
+    eliminateFalsum =
+      constructFromKnownDeduction
+        ( \deduction -> case conclusion deduction of
+            Falsum -> return $ Tree f [] [deduction]
+            _ -> empty
+        )
 
 main :: IO ()
 main = undefined

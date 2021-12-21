@@ -1,10 +1,12 @@
 module Solver where
 
-import Control.Monad.Reader (ReaderT (runReaderT), asks)
+import Control.Applicative ((<|>))
+import Control.Monad (liftM2, msum)
+import Control.Monad.Reader (ReaderT (runReaderT), asks, local)
 import Control.Monad.State (StateT (runStateT), gets, modify)
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import qualified Data.List as List (find)
-import Formula (Assumption (Assumption), AssumptionCounter, Formula, Theory)
+import Formula (Assumption (Assumption), AssumptionCounter, DeductionTree (Assumption', Tree), Formula, Theory)
 
 newtype SolverEnviron = Environ {theory :: Theory}
 
@@ -13,7 +15,7 @@ data SolverState = State {counter :: AssumptionCounter, assumptions :: [Assumpti
 type Solver = ReaderT SolverEnviron (StateT SolverState Maybe)
 
 initialState :: SolverState
-initialState = State 0 []
+initialState = State 1 []
 
 runSolver :: Solver a -> SolverEnviron -> Maybe (a, SolverState)
 runSolver s environ = runStateT (runReaderT s environ) initialState
@@ -43,7 +45,35 @@ addAssumption :: Formula -> AssumptionCounter -> Solver ()
 addAssumption assumption number = modify (\state -> state {assumptions = Assumption assumption number : assumptions state})
 
 popAssumption :: Solver ()
-popAssumption = modify (\state -> state {assumptions = case assumptions state of [] -> []; (_:other) -> other})
+popAssumption = modify (\state -> state {assumptions = case assumptions state of [] -> []; (_ : other) -> other})
+
+findKnown :: (Formula -> Bool) -> Solver DeductionTree
+findKnown predicate =
+  ((\formula -> Tree formula [] []) <$> find predicate getTheory)
+    <|> (Assumption' <$> find (\(Assumption f _) -> predicate f) getAssumptions)
+
+constructFromKnownDeduction :: (DeductionTree -> Solver a) -> Solver a
+constructFromKnownDeduction p = known >>= msum . map p
+  where
+    known :: Solver [DeductionTree]
+    known =
+      liftM2
+        (++)
+        (map (\formula -> Tree formula [] []) <$> getTheory)
+        (map Assumption' <$> getAssumptions)
+
+{-
+If it's a tree, then f was in the theory so we temporarily remove it from the environment.
+Otherwise we temporarily remove the assumption from the state.
+-}
+withoutKnown :: Solver a -> DeductionTree -> Solver a
+withoutKnown solver (Tree f _ _) = local (\env -> env {theory = filter (/= f) (theory env)}) solver
+withoutKnown solver (Assumption' (Assumption f _)) = do
+  origininalAssumptions <- getAssumptions
+  modify (\state -> state {assumptions = filter (\(Assumption f' _) -> f /= f') (assumptions state)})
+  result <- solver
+  modify (\state -> state {assumptions = origininalAssumptions})
+  return result
 
 find :: (a -> Bool) -> Solver [a] -> Solver a
 find predicate solver = solver >>= lift . lift . List.find predicate
