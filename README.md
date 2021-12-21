@@ -6,8 +6,7 @@ The output can be rendered in LaTeX using the [lkproof](https://ctan.org/pkg/lkp
 Suppose you want a proof for `A0, A1, A2 ⊢ A0 ∧ A1 ∧ A3 → (A2 ∨ ⊥)`. You can then run the following:
 ```haskell
 $ ghci Main.hs
-> Just t = proof ((Atom 0 /\ Atom 1) /\ (Atom 3 --> (Atom 2 \/ Falsum))) [Atom 0, Atom 1, Atom 2]
-> printDeductionTree t
+> sequence_ $ printDeductionTree <$> proof ((Atom 0 /\ Atom 1) /\ (Atom 3 --> (Atom 2 \/ Falsum))) [Atom 0, Atom 1, Atom 2]
 \infer
     {A_0 \land A_1 \land A_3 \rightarrow (A_2 \lor \bot)}
     {
@@ -39,5 +38,6 @@ The rendered output is:
 ![Rendered output](https://i.gyazo.com/2403a017c5c0368eca887b825cd6c323.png)
 
 ## TODO
- - [ ] Elimination rules
+ - [x] Introduction rules
+ - [x] Elimination rules
  - [ ] Extend to first order propositional logic
