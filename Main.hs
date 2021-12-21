@@ -100,7 +100,7 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
             Impl f1 f2 ->
               if f2 /= f
                 then empty
-                else (\f1Deduction -> Tree f [] [f1Deduction, deduction]) <$> proof' f1 `withoutKnown` deduction
+                else (\f1Deduction -> Tree f [] [f1Deduction, deduction]) <$> proof' f1
             _ -> empty
         )
 
