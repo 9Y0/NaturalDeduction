@@ -81,26 +81,26 @@ proofByIntroduction :: Formula -> Solver DeductionTree
 proofByIntroduction f = case f of
   Falsum -> empty
   Atom _ -> empty
-  And f1 f2 -> Tree f [] <$> sequence [proof' f1, proof' f2]
-  Or f1 f2 -> Tree f [] . return <$> (proof' f1 <|> proof' f2)
-  Impl f1 f2 -> do
-    (p, assumptionNumber) <- proof' f2 `withAssumption` f1
-    return $ Tree f [assumptionNumber] [p]
+  And lhs rhs -> Tree f [] <$> sequence [proof' lhs, proof' rhs]
+  Or lhs rhs -> Tree f [] . return <$> (proof' lhs <|> proof' rhs)
+  Impl lhs rhs -> do
+    (rhsProof, assumptionNumber) <- proof' rhs `withAssumption` lhs
+    return $ Tree f [assumptionNumber] [rhsProof]
 
 proofByElimination :: Formula -> Solver DeductionTree
 proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|> eliminateFalsum
   where
     eliminateAnd :: Solver DeductionTree
-    eliminateAnd = Tree f [] . return <$> findKnown (\case And f1 f2 -> f == f1 || f == f2; _ -> False)
+    eliminateAnd = Tree f [] . return <$> findKnown (\case And lhs rhs -> f == lhs || f == rhs; _ -> False)
 
     eliminateImplication :: Solver DeductionTree
     eliminateImplication = do
       constructFromKnownDeduction
         ( \deduction -> case conclusion deduction of
-            Impl f1 f2 ->
-              if f2 /= f
+            Impl lhs rhs ->
+              if rhs /= f
                 then empty
-                else (\f1Deduction -> Tree f [] [f1Deduction, deduction]) <$> proof' f1
+                else (\lhsDeduction -> Tree f [] [lhsDeduction, deduction]) <$> proof' lhs
             _ -> empty
         )
 
@@ -108,10 +108,10 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
     eliminateOr =
       constructFromKnownDeduction
         ( \deduction -> case conclusion deduction of
-            Or f1 f2 ->
+            Or lhs rhs ->
               ( do
-                  (leftDeduction, leftNumber) <- proof' f `withAssumption` f1
-                  (rightDeduction, rightNumber) <- proof' f `withAssumption` f2
+                  (leftDeduction, leftNumber) <- proof' f `withAssumption` lhs
+                  (rightDeduction, rightNumber) <- proof' f `withAssumption` rhs
                   return $ Tree f [leftNumber, rightNumber] [deduction, leftDeduction, rightDeduction]
               )
                 `withoutKnown` deduction
