@@ -82,7 +82,7 @@ proofByIntroduction f = case f of
   Falsum -> empty
   Atom _ -> empty
   And f1 f2 -> Tree f [] <$> sequence [proof' f1, proof' f2]
-  Or f1 f2 -> Tree f [] . return <$> proof' f1 <|> proof' f2
+  Or f1 f2 -> Tree f [] . return <$> (proof' f1 <|> proof' f2)
   Impl f1 f2 -> do
     (p, assumptionNumber) <- proof' f2 `withAssumption` f1
     return $ Tree f [assumptionNumber] [p]
