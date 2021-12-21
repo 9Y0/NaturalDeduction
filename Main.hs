@@ -38,8 +38,9 @@ printDeductionTree = go 0
       putStr $ spaces indentLevel
       putStr "\\infer"
       case maybeCounter of
-        Nothing -> putChar '\n'
-        Just counter -> do putStr "[^"; putStr $ show counter; putStr "]\n"
+        [] -> putChar '\n'
+        [counter] -> do putStr "[^"; putStr $ show counter; putStr "]\n"
+        counters -> do putStr "[^{"; sequence_ $ intersperse (putChar ',') $ putStr <$> map show counters; putStr "}]\n"
       putStr $ spaces (indentLevel + 1)
       putChar '{'
       putStr $ show f
@@ -61,21 +62,21 @@ proofFromTheory :: Formula -> Solver DeductionTree
 proofFromTheory f = do
   theory <- getTheory
   if f `elem` theory
-    then Tree f Nothing . map Assumption' <$> getAssumptions
+    then Tree f [] . map Assumption' <$> getAssumptions
     else empty
 
 proofFromAssumption :: Formula -> Solver DeductionTree
-proofFromAssumption f = Tree f Nothing . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
+proofFromAssumption f = Tree f [] . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
 
 proofByIntroduction :: Formula -> Solver DeductionTree
 proofByIntroduction f = case f of
   Falsum -> empty
   Atom _ -> empty
-  And f1 f2 -> Tree f Nothing <$> sequence [proof' f1, proof' f2]
-  Or f1 f2 -> Tree f Nothing . return <$> proof' f1 <|> proof' f2
+  And f1 f2 -> Tree f [] <$> sequence [proof' f1, proof' f2]
+  Or f1 f2 -> Tree f [] . return <$> proof' f1 <|> proof' f2
   Impl f1 f2 -> do
     (p, assumptionNumber) <- proof' f2 `withAssumption` f1
-    return $ Tree f (Just assumptionNumber) [p]
+    return $ Tree f [assumptionNumber] [p]
 
 main :: IO ()
 main = undefined
