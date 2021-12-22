@@ -22,6 +22,7 @@ import Solver
     withAssumption,
     withoutKnown,
   )
+import Util (ifM)
 
 conclusion :: DeductionTree -> Formula
 conclusion (Tree f _ _) = f
@@ -67,11 +68,11 @@ proof' f = proofFromTheory f <|> proofFromAssumption f <|> proofByIntroduction f
 
 -- TODO: Assumptions are now always rendered, even if they are not directly used
 proofFromTheory :: Formula -> Solver DeductionTree
-proofFromTheory f = do
-  theory <- getTheory
-  if f `elem` theory
-    then Tree f Nothing . map Assumption' <$> getAssumptions
-    else empty
+proofFromTheory f =
+  ifM
+    ((f `elem`) <$> getTheory)
+    (Tree f Nothing . map Assumption' <$> getAssumptions)
+    empty
 
 proofFromAssumption :: Formula -> Solver DeductionTree
 proofFromAssumption f = Tree f Nothing . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
