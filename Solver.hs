@@ -1,6 +1,6 @@
 module Solver where
 
-import Control.Applicative ((<|>), empty)
+import Control.Applicative (empty, (<|>))
 import Control.Monad (liftM2, msum, when)
 import Control.Monad.Reader (ReaderT (runReaderT), asks, local)
 import Control.Monad.State (StateT (runStateT), gets, modify)
@@ -10,7 +10,9 @@ import qualified Data.List as List (find)
 import Formula (Assumption (Assumption), AssumptionCounter, DeductionTree (Assumption', Tree), Formula, Theory)
 import Util (ifM)
 
-newtype SolverEnviron = Environ {theory :: Theory}
+data System = Intuitionistic | Classical
+
+data SolverEnviron = Environ {theory :: Theory, system :: System}
 
 data SolverState = State {counter :: AssumptionCounter, assumptions :: [Assumption]}
 
@@ -25,6 +27,9 @@ runSolver s environ = runStateT (runReaderT s environ) initialState
 getTheory :: Solver Theory
 getTheory = asks theory
 
+getSystem :: Solver System
+getSystem = asks system
+
 getAssumptions :: Solver [Assumption]
 getAssumptions = gets assumptions
 
@@ -34,7 +39,7 @@ getAssumptionCounter = gets counter
 withAssumption :: Solver a -> Either Formula Assumption -> Solver (a, AssumptionCounter)
 withAssumption solver assumption =
   ifM
-    (isKnown $ either id (\(Assumption f' _) -> f') assumption)
+    (isKnown $ either id (\(Assumption f _) -> f) assumption)
     empty
     ( do
         assumptionNumber <- getAssumptionCounter

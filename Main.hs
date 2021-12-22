@@ -13,10 +13,12 @@ import Formula
 import Solver
   ( Solver,
     SolverEnviron (Environ),
+    System (Classical, Intuitionistic),
     constructFromKnownDeduction,
     find,
     findKnown,
     getAssumptions,
+    getSystem,
     getTheory,
     runSolver,
     withAssumption,
@@ -60,11 +62,24 @@ printDeductionTree = go 0
       putStr $ spaces (indentLevel + 1)
       putStr "}\n"
 
-proof :: Formula -> Theory -> Maybe DeductionTree
-proof f theory = fst <$> runSolver (proof' f) (Environ theory)
+proofNI :: Formula -> Theory -> Maybe DeductionTree
+proofNI f theory = fst <$> runSolver (proof' f) (Environ theory Intuitionistic)
+
+proofNK :: Formula -> Theory -> Maybe DeductionTree
+proofNK f theory = fst <$> runSolver (proof' f) (Environ theory Classical)
 
 proof' :: Formula -> Solver DeductionTree
-proof' f = proofFromTheory f <|> proofFromAssumption f <|> proofByIntroduction f <|> proofByElimination f
+proof' f =
+  proofFromTheory f
+    <|> proofFromAssumption f
+    <|> proofByIntroduction f
+    <|> proofByElimination f
+    <|> ( getSystem
+            >>= ( \case
+                    Intuitionistic -> empty
+                    Classical -> proofByContradiction f
+                )
+        )
 
 -- TODO: Assumptions are now always rendered, even if they are not directly used
 proofFromTheory :: Formula -> Solver DeductionTree
@@ -125,6 +140,14 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
             Falsum -> return $ Tree f Nothing [deduction]
             _ -> empty
         )
+
+proofByContradiction :: Formula -> Solver DeductionTree
+proofByContradiction f = case f of
+  Impl _ Falsum -> empty -- This case should already be handled by the (->) introduction
+  Falsum -> empty -- Proving falsum by contradiction doesn't make sense
+  _ -> do
+    (falsumProof, assumptionNumber) <- proof' Falsum `withAssumption` Left (Impl f Falsum)
+    return $ Tree f (Just assumptionNumber) [falsumProof]
 
 main :: IO ()
 main = undefined
