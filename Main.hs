@@ -84,7 +84,7 @@ proofByIntroduction f = case f of
   And lhs rhs -> Tree f [] <$> sequence [proof' lhs, proof' rhs]
   Or lhs rhs -> Tree f [] . return <$> (proof' lhs <|> proof' rhs)
   Impl lhs rhs -> do
-    (rhsProof, assumptionNumber) <- proof' rhs `withAssumption` lhs
+    (rhsProof, assumptionNumber) <- proof' rhs `withAssumption` Left lhs
     return $ Tree f [assumptionNumber] [rhsProof]
 
 proofByElimination :: Formula -> Solver DeductionTree
@@ -110,9 +110,9 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
         ( \deduction -> case conclusion deduction of
             Or lhs rhs ->
               ( do
-                  (leftDeduction, leftNumber) <- proof' f `withAssumption` lhs
-                  (rightDeduction, rightNumber) <- proof' f `withAssumption` rhs
-                  return $ Tree f [leftNumber, rightNumber] [deduction, leftDeduction, rightDeduction]
+                  (leftDeduction, assumptionNumber) <- proof' f `withAssumption` Left lhs
+                  (rightDeduction, _) <- proof' f `withAssumption` Right (Assumption rhs assumptionNumber)
+                  return $ Tree f [assumptionNumber] [deduction, leftDeduction, rightDeduction]
               )
                 `withoutKnown` deduction
             _ -> empty

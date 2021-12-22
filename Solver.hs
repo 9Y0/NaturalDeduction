@@ -1,10 +1,11 @@
 module Solver where
 
 import Control.Applicative ((<|>))
-import Control.Monad (liftM2, msum)
+import Control.Monad (liftM2, msum, when)
 import Control.Monad.Reader (ReaderT (runReaderT), asks, local)
 import Control.Monad.State (StateT (runStateT), gets, modify)
 import Control.Monad.Trans.Class (MonadTrans (lift))
+import Data.Either (isLeft)
 import qualified Data.List as List (find)
 import Formula (Assumption (Assumption), AssumptionCounter, DeductionTree (Assumption', Tree), Formula, Theory)
 
@@ -29,20 +30,22 @@ getAssumptions = gets assumptions
 getAssumptionCounter :: Solver AssumptionCounter
 getAssumptionCounter = gets counter
 
-withAssumption :: Solver a -> Formula -> Solver (a, AssumptionCounter)
+withAssumption :: Solver a -> Either Formula Assumption -> Solver (a, AssumptionCounter)
 withAssumption solver assumption = do
   assumptionNumber <- getAssumptionCounter
-  addAssumption assumption assumptionNumber
-  incrementAssumptionCounter
+  addAssumption $ either (`Assumption` assumptionNumber) id assumption
+  when (isLeft assumption) incrementAssumptionCounter
   result <- solver
   popAssumption
-  return (result, assumptionNumber)
+  return $ case assumption of
+    Left _ -> (result, assumptionNumber)
+    Right (Assumption _ number) -> (result, number)
 
 incrementAssumptionCounter :: Solver ()
 incrementAssumptionCounter = modify (\state -> state {counter = counter state + 1})
 
-addAssumption :: Formula -> AssumptionCounter -> Solver ()
-addAssumption assumption number = modify (\state -> state {assumptions = Assumption assumption number : assumptions state})
+addAssumption :: Assumption -> Solver ()
+addAssumption assumption = modify (\state -> state {assumptions = assumption : assumptions state})
 
 popAssumption :: Solver ()
 popAssumption = modify (\state -> state {assumptions = case assumptions state of [] -> []; (_ : other) -> other})
