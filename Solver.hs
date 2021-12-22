@@ -1,6 +1,6 @@
 module Solver where
 
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), empty)
 import Control.Monad (liftM2, msum, when)
 import Control.Monad.Reader (ReaderT (runReaderT), asks, local)
 import Control.Monad.State (StateT (runStateT), gets, modify)
@@ -8,6 +8,7 @@ import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.Either (isLeft)
 import qualified Data.List as List (find)
 import Formula (Assumption (Assumption), AssumptionCounter, DeductionTree (Assumption', Tree), Formula, Theory)
+import Util (ifM)
 
 newtype SolverEnviron = Environ {theory :: Theory}
 
@@ -31,15 +32,27 @@ getAssumptionCounter :: Solver AssumptionCounter
 getAssumptionCounter = gets counter
 
 withAssumption :: Solver a -> Either Formula Assumption -> Solver (a, AssumptionCounter)
-withAssumption solver assumption = do
-  assumptionNumber <- getAssumptionCounter
-  addAssumption $ either (`Assumption` assumptionNumber) id assumption
-  when (isLeft assumption) incrementAssumptionCounter
-  result <- solver
-  popAssumption
-  return $ case assumption of
-    Left _ -> (result, assumptionNumber)
-    Right (Assumption _ number) -> (result, number)
+withAssumption solver assumption =
+  ifM
+    (isKnown $ either id (\(Assumption f' _) -> f') assumption)
+    empty
+    ( do
+        assumptionNumber <- getAssumptionCounter
+        addAssumption $ either (`Assumption` assumptionNumber) id assumption
+        when (isLeft assumption) incrementAssumptionCounter
+        result <- solver
+        popAssumption
+        return $ case assumption of
+          Left _ -> (result, assumptionNumber)
+          Right (Assumption _ number) -> (result, number)
+    )
+
+isKnown :: Formula -> Solver Bool
+isKnown f =
+  liftM2
+    (||)
+    ((f `elem`) <$> getTheory)
+    (any (\(Assumption f' _) -> f == f') <$> getAssumptions)
 
 incrementAssumptionCounter :: Solver ()
 incrementAssumptionCounter = modify (\state -> state {counter = counter state + 1})
