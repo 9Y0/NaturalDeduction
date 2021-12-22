@@ -52,7 +52,7 @@ popAssumption = modify (\state -> state {assumptions = case assumptions state of
 
 findKnown :: (Formula -> Bool) -> Solver DeductionTree
 findKnown predicate =
-  ((\formula -> Tree formula [] []) <$> find predicate getTheory)
+  ((\formula -> Tree formula Nothing []) <$> find predicate getTheory)
     <|> (Assumption' <$> find (\(Assumption f _) -> predicate f) getAssumptions)
 
 constructFromKnownDeduction :: (DeductionTree -> Solver a) -> Solver a
@@ -62,7 +62,7 @@ constructFromKnownDeduction p = known >>= msum . map p
     known =
       liftM2
         (++)
-        (map (\formula -> Tree formula [] []) <$> getTheory)
+        (map (\formula -> Tree formula Nothing []) <$> getTheory)
         (map Assumption' <$> getAssumptions)
 
 {-

@@ -47,9 +47,8 @@ printDeductionTree = go 0
       putStr $ spaces indentLevel
       putStr "\\infer"
       case maybeCounter of
-        [] -> putChar '\n'
-        [counter] -> do putStr "[^"; putStr $ show counter; putStr "]\n"
-        counters -> do putStr "[^{"; sequence_ $ intersperse (putChar ',') $ putStr <$> map show counters; putStr "}]\n"
+        Nothing -> putChar '\n'
+        Just counter -> do putStr "[^"; putStr $ show counter; putStr "]\n"
       putStr $ spaces (indentLevel + 1)
       putChar '{'
       putStr $ show f
@@ -71,27 +70,27 @@ proofFromTheory :: Formula -> Solver DeductionTree
 proofFromTheory f = do
   theory <- getTheory
   if f `elem` theory
-    then Tree f [] . map Assumption' <$> getAssumptions
+    then Tree f Nothing . map Assumption' <$> getAssumptions
     else empty
 
 proofFromAssumption :: Formula -> Solver DeductionTree
-proofFromAssumption f = Tree f [] . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
+proofFromAssumption f = Tree f Nothing . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
 
 proofByIntroduction :: Formula -> Solver DeductionTree
 proofByIntroduction f = case f of
   Falsum -> empty
   Atom _ -> empty
-  And lhs rhs -> Tree f [] <$> sequence [proof' lhs, proof' rhs]
-  Or lhs rhs -> Tree f [] . return <$> (proof' lhs <|> proof' rhs)
+  And lhs rhs -> Tree f Nothing <$> sequence [proof' lhs, proof' rhs]
+  Or lhs rhs -> Tree f Nothing . return <$> (proof' lhs <|> proof' rhs)
   Impl lhs rhs -> do
     (rhsProof, assumptionNumber) <- proof' rhs `withAssumption` Left lhs
-    return $ Tree f [assumptionNumber] [rhsProof]
+    return $ Tree f (Just assumptionNumber) [rhsProof]
 
 proofByElimination :: Formula -> Solver DeductionTree
 proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|> eliminateFalsum
   where
     eliminateAnd :: Solver DeductionTree
-    eliminateAnd = Tree f [] . return <$> findKnown (\case And lhs rhs -> f == lhs || f == rhs; _ -> False)
+    eliminateAnd = Tree f Nothing . return <$> findKnown (\case And lhs rhs -> f == lhs || f == rhs; _ -> False)
 
     eliminateImplication :: Solver DeductionTree
     eliminateImplication = do
@@ -100,7 +99,7 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
             Impl lhs rhs ->
               if rhs /= f
                 then empty
-                else (\lhsDeduction -> Tree f [] [lhsDeduction, deduction]) <$> proof' lhs
+                else (\lhsDeduction -> Tree f Nothing [lhsDeduction, deduction]) <$> proof' lhs
             _ -> empty
         )
 
@@ -112,7 +111,7 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
               ( do
                   (leftDeduction, assumptionNumber) <- proof' f `withAssumption` Left lhs
                   (rightDeduction, _) <- proof' f `withAssumption` Right (Assumption rhs assumptionNumber)
-                  return $ Tree f [assumptionNumber] [deduction, leftDeduction, rightDeduction]
+                  return $ Tree f (Just assumptionNumber) [deduction, leftDeduction, rightDeduction]
               )
                 `withoutKnown` deduction
             _ -> empty
@@ -122,7 +121,7 @@ proofByElimination f = eliminateAnd <|> eliminateImplication <|> eliminateOr <|>
     eliminateFalsum =
       constructFromKnownDeduction
         ( \deduction -> case conclusion deduction of
-            Falsum -> return $ Tree f [] [deduction]
+            Falsum -> return $ Tree f Nothing [deduction]
             _ -> empty
         )
 

@@ -35,5 +35,5 @@ data Assumption = Assumption Formula AssumptionCounter
 
 type Theory = [Formula]
 
-data DeductionTree = Tree Formula [AssumptionCounter] [DeductionTree] | Assumption' Assumption
+data DeductionTree = Tree Formula (Maybe AssumptionCounter) [DeductionTree] | Assumption' Assumption
   deriving (Show)
