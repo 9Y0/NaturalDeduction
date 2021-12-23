@@ -1,13 +1,21 @@
 module Solver where
 
-import Control.Applicative (empty, (<|>))
+import Control.Applicative (empty)
 import Control.Monad (liftM2, msum, when)
 import Control.Monad.Reader (ReaderT (runReaderT), asks, local)
 import Control.Monad.State (StateT (runStateT), gets, modify)
 import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.Either (isLeft)
 import qualified Data.List as List (find)
-import Formula (Assumption (Assumption), AssumptionCounter, DeductionTree (Assumption', Tree), Formula, Theory)
+import Formula
+  ( Assumption (Assumption),
+    AssumptionCounter,
+    DeductionTree (Assumption', Tree),
+    Formula,
+    Theory,
+    collectKnown,
+    conclusion,
+  )
 import Util (ifM)
 
 data System = Intuitionistic | Classical
@@ -53,11 +61,7 @@ withAssumption solver assumption =
     )
 
 isKnown :: Formula -> Solver Bool
-isKnown f =
-  liftM2
-    (||)
-    ((f `elem`) <$> getTheory)
-    (any (\(Assumption f' _) -> f == f') <$> getAssumptions)
+isKnown f = elem f <$> knownFormulas
 
 incrementAssumptionCounter :: Solver ()
 incrementAssumptionCounter = modify (\state -> state {counter = counter state + 1})
@@ -69,19 +73,21 @@ popAssumption :: Solver ()
 popAssumption = modify (\state -> state {assumptions = case assumptions state of [] -> []; (_ : other) -> other})
 
 findKnown :: (Formula -> Bool) -> Solver DeductionTree
-findKnown predicate =
-  ((\formula -> Tree formula Nothing []) <$> find predicate getTheory)
-    <|> (Assumption' <$> find (\(Assumption f _) -> predicate f) getAssumptions)
+findKnown predicate = find (predicate . conclusion) knownDeductions
 
 constructFromKnownDeduction :: (DeductionTree -> Solver a) -> Solver a
-constructFromKnownDeduction p = known >>= msum . map p
-  where
-    known :: Solver [DeductionTree]
-    known =
-      liftM2
-        (++)
-        (map (\formula -> Tree formula Nothing []) <$> getTheory)
-        (map Assumption' <$> getAssumptions)
+constructFromKnownDeduction p = knownDeductions >>= msum . map p
+
+knownFormulas :: Solver [Formula]
+knownFormulas = map conclusion <$> knownDeductions
+
+knownDeductions :: Solver [DeductionTree]
+knownDeductions =
+  collectKnown
+    <$> liftM2
+      (++)
+      (map (\formula -> Tree formula Nothing []) <$> getTheory)
+      (map Assumption' <$> getAssumptions)
 
 {-
 If it's a tree, then f was in the theory so we temporarily remove it from the environment.

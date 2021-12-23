@@ -37,3 +37,18 @@ type Theory = [Formula]
 
 data DeductionTree = Tree Formula (Maybe AssumptionCounter) [DeductionTree] | Assumption' Assumption
   deriving (Show)
+
+conclusion :: DeductionTree -> Formula
+conclusion (Tree f _ _) = f
+conclusion (Assumption' (Assumption f _)) = f
+
+collectKnown :: [DeductionTree] -> [DeductionTree]
+collectKnown = go []
+  where
+    go acc [] = acc
+    go acc (deduction : rest) = case conclusion deduction of
+      And lhs rhs ->
+        let lhsDeduction = Tree lhs Nothing [deduction]
+            rhsDeduction = Tree rhs Nothing [deduction]
+         in go acc (lhsDeduction : rhsDeduction : rest)
+      _ -> deduction : go acc rest

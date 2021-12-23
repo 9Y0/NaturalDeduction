@@ -9,6 +9,7 @@ import Formula
     DeductionTree (Assumption', Tree),
     Formula (And, Atom, Falsum, Impl, Or),
     Theory,
+    conclusion,
   )
 import Solver
   ( Solver,
@@ -25,10 +26,6 @@ import Solver
     withoutKnown,
   )
 import Util (ifM)
-
-conclusion :: DeductionTree -> Formula
-conclusion (Tree f _ _) = f
-conclusion (Assumption' (Assumption f _)) = f
 
 printDeductionTree :: DeductionTree -> IO ()
 printDeductionTree = go 0
