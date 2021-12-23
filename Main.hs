@@ -16,16 +16,12 @@ import Solver
     SolverEnviron (Environ),
     System (Classical, Intuitionistic),
     constructFromKnownDeduction,
-    find,
     findKnown,
-    getAssumptions,
     getSystem,
-    getTheory,
     runSolver,
     withAssumption,
     withoutKnown,
   )
-import Util (ifM)
 
 printDeductionTree :: DeductionTree -> IO ()
 printDeductionTree = go 0
@@ -67,8 +63,7 @@ proofNK f theory = fst <$> runSolver (proof' f) (Environ theory Classical)
 
 proof' :: Formula -> Solver DeductionTree
 proof' f =
-  proofFromTheory f
-    <|> proofFromAssumption f
+  proofFromKnown f
     <|> proofByIntroduction f
     <|> proofByElimination f
     <|> ( getSystem
@@ -78,16 +73,8 @@ proof' f =
                 )
         )
 
--- TODO: Assumptions are now always rendered, even if they are not directly used
-proofFromTheory :: Formula -> Solver DeductionTree
-proofFromTheory f =
-  ifM
-    ((f `elem`) <$> getTheory)
-    (Tree f Nothing . map Assumption' <$> getAssumptions)
-    empty
-
-proofFromAssumption :: Formula -> Solver DeductionTree
-proofFromAssumption f = Tree f Nothing . return . Assumption' <$> find (\(Assumption f' _) -> f == f') getAssumptions
+proofFromKnown :: Formula -> Solver DeductionTree
+proofFromKnown f = constructFromKnownDeduction (\deduction -> if conclusion deduction == f then return deduction else empty)
 
 proofByIntroduction :: Formula -> Solver DeductionTree
 proofByIntroduction f = case f of
